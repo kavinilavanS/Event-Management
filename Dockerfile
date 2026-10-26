@@ -18,4 +18,4 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 # Start server with background hold cleanup worker
-CMD ["node", "server.js"]
+CMD ["node", "backend/server.js"]

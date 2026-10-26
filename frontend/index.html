@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EventNest — High-Concurrency Multi-Tenant Ticket Reservation System</title>
+  <meta name="description" content="High-concurrency, multi-tenant event management and ticket reservation platform with zero double-booking, 10-minute temporary holds, and real-time analytics.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Background Glow Accents -->
+  <div class="glow-orb glow-top-left"></div>
+  <div class="glow-orb glow-bottom-right"></div>
+
+  <!-- Header & Navigation -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="20" height="12" x="2" y="6" rx="3"></rect>
+            <circle cx="12" cy="12" r="2"></circle>
+            <path d="M6 12h.01M18 12h.01"></path>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>EventNest</h1>
+          <span class="brand-badge">ACID Concurrency</span>
+        </div>
+      </div>
+
+      <!-- Live Persona Switcher -->
+      <div class="user-persona-section">
+        <label for="personaSelector" class="persona-label">
+          <span class="pulsing-dot"></span> Role Persona:
+        </label>
+        <div class="custom-select-wrapper">
+          <select id="personaSelector" class="persona-select">
+            <option value="usr_att_1" data-role="ATTENDEE" data-tenant="tenant_acme" data-name="Alice Johnson">
+              👤 Alice Johnson (Attendee · Acme)
+            </option>
+            <option value="usr_att_2" data-role="ATTENDEE" data-tenant="tenant_acme" data-name="Bob Williams">
+              👤 Bob Williams (Attendee · Acme)
+            </option>
+            <option value="usr_org_1" data-role="ORGANIZER" data-tenant="tenant_acme" data-name="Sarah Connor (Acme Events)">
+              🎪 Sarah Connor (Organizer · Acme Events)
+            </option>
+            <option value="usr_org_2" data-role="ORGANIZER" data-tenant="tenant_apex" data-name="David Miller (Apex Music)">
+              🎵 David Miller (Organizer · Apex Music)
+            </option>
+            <option value="usr_admin_1" data-role="ADMIN" data-tenant="tenant_platform" data-name="System Administrator">
+              ⚡ System Administrator (Platform Admin)
+            </option>
+          </select>
+        </div>
+        <div id="activeUserBadge" class="persona-badge">
+          <span id="badgeRole" class="badge-role">ATTENDEE</span>
+          <span id="badgeTenant" class="badge-tenant">tenant_acme</span>
+        </div>
+      </div>
+
+      <!-- Backend API Config Button (for Vercel & Render) -->
+      <button id="btnOpenApiConfig" class="btn btn-sm btn-secondary api-config-btn" title="Configure Render Backend API URL">
+        <span id="apiStatusDot" class="status-dot-green"></span>
+        <span id="apiStatusText">Backend: Auto</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </button>
+    </div>
+
+    <!-- Active Hold Banner (Shows when user has active hold) -->
+    <div id="globalHoldAlert" class="global-hold-alert hidden">
+      <div class="hold-alert-content">
+        <div class="hold-timer-info">
+          <span class="alarm-icon">⏱️</span>
+          <span>Temporary Hold Active! <strong>10-min countdown:</strong></span>
+          <span id="globalHoldTimeRemaining" class="timer-digits">09:59</span>
+          <span id="globalHoldTierName" class="hold-tier-pill">VIP Pass (1 seat)</span>
+        </div>
+        <div class="hold-alert-actions">
+          <button id="btnQuickGoToHold" class="btn btn-sm btn-primary">Go to Checkout</button>
+          <button id="btnQuickRelease" class="btn btn-sm btn-outline-danger">Release Seats</button>
+        </div>
+      </div>
+      <div class="timer-progress-track">
+        <div id="globalHoldProgressBar" class="timer-progress-fill" style="width: 100%;"></div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <div class="nav-container">
+        <button class="nav-tab active" data-tab="catalog">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          Events Catalog
+        </button>
+        <button class="nav-tab" data-tab="checkout">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="21" r="1"></circle><circle cx="19" cy="21" r="1"></circle><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path></svg>
+          My Holds & Cart
+          <span id="cartHoldCount" class="badge-count hidden">1</span>
+        </button>
+        <button class="nav-tab" data-tab="organizer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="2" y2="22"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+          Organizer Studio & Analytics
+        </button>
+        <button class="nav-tab" data-tab="concurrency">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+          Concurrency Stress Test Lab
+        </button>
+        <button class="nav-tab" data-tab="admin">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          System & Worker Diagnostics
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-content">
+
+    <!-- TAB 1: Events Catalog -->
+    <section id="tab-catalog" class="tab-pane active">
+      <div class="section-header">
+        <div>
+          <h2>Available Events</h2>
+          <p class="section-subtitle">Real-time inventory backed by ACID atomic holds and read caching</p>
+        </div>
+        <div class="header-actions">
+          <span id="cacheSourceIndicator" class="cache-indicator">
+            <span class="cache-status-dot"></span> Source: <strong id="cacheSourceText">loading...</strong>
+          </span>
+          <button id="btnRefreshEvents" class="btn btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path><path d="M16 21h5v-5"></path></svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <div id="eventsGrid" class="events-grid">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- TAB 2: My Holds & Checkout -->
+    <section id="tab-checkout" class="tab-pane">
+      <div class="section-header">
+        <div>
+          <h2>Temporary Reservation Holds & Checkout</h2>
+          <p class="section-subtitle">Seats are locked exclusively for 10 minutes. If checkout isn't finished in time, the worker returns them to inventory.</p>
+        </div>
+      </div>
+
+      <div id="noHoldCard" class="empty-state-card">
+        <div class="empty-icon">🎟️</div>
+        <h3>No Active Ticket Holds</h3>
+        <p>You don't currently have any tickets on hold. Browse the Events Catalog and reserve a seat to start your 10-minute checkout window.</p>
+        <button class="btn btn-primary" onclick="window.switchTab('catalog')">Browse Events</button>
+      </div>
+
+      <div id="activeHoldContainer" class="hold-detail-container hidden">
+        <div class="card hold-card">
+          <div class="hold-card-header">
+            <div>
+              <span class="badge badge-warning">10-Minute Temporary Hold Active</span>
+              <h3 id="holdEventTitle">Global Tech & AI Summit 2026</h3>
+              <p id="holdTierName" class="text-muted">VIP All-Access Pass</p>
+            </div>
+            <div class="hold-timer-box">
+              <span class="timer-label">Time Remaining</span>
+              <div id="holdBigCountdown" class="big-countdown">10:00</div>
+              <span id="holdExpiryTimeFormatted" class="expiry-sub">Expires at --:--:--</span>
+            </div>
+          </div>
+
+          <div class="timer-progress-track big-track">
+            <div id="holdBigProgressBar" class="timer-progress-fill" style="width: 100%;"></div>
+          </div>
+
+          <div class="hold-summary-grid">
+            <div class="summary-item">
+              <span class="label">Hold ID</span>
+              <span id="summaryHoldId" class="value mono">hld_---</span>
+            </div>
+            <div class="summary-item">
+              <span class="label">Quantity</span>
+              <span id="summaryQuantity" class="value">1 seat</span>
+            </div>
+            <div class="summary-item">
+              <span class="label">Unit Price</span>
+              <span id="summaryUnitPrice" class="value">$0.00</span>
+            </div>
+            <div class="summary-item highlight">
+              <span class="label">Total Amount</span>
+              <span id="summaryTotalAmount" class="value">$0.00</span>
+            </div>
+          </div>
+
+          <div class="checkout-simulation-box">
+            <h4>Simulate Payment Gateway Transaction</h4>
+            <p class="text-sm text-muted">Test both successful authorization and declined payment rollback handling:</p>
+            
+            <div class="checkout-buttons">
+              <button id="btnPaySuccess" class="btn btn-lg btn-success">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                Simulate Successful Payment ($)
+              </button>
+              <button id="btnPayDecline" class="btn btn-lg btn-outline-warning">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                Simulate Card Decline (Test 402 Rollback)
+              </button>
+              <button id="btnCancelHold" class="btn btn-lg btn-outline-danger">
+                Release / Cancel Hold
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Completed Order Receipt -->
+        <div id="orderReceiptCard" class="card receipt-card hidden">
+          <div class="receipt-header">
+            <div class="success-icon-badge">✓</div>
+            <div>
+              <h3>Order Confirmed & Paid</h3>
+              <p class="text-sm text-muted">Transaction settled via mock payment gateway</p>
+            </div>
+          </div>
+          <div class="receipt-body" id="receiptContent">
+            <!-- Rendered after payment -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: Organizer Studio & Analytics -->
+    <section id="tab-organizer" class="tab-pane">
+      <div class="section-header">
+        <div>
+          <h2>Organizer Studio & Real-Time Analytics</h2>
+          <p class="section-subtitle">Multi-tenant dashboard for event creators (Scoped to active tenant)</p>
+        </div>
+        <div class="header-actions">
+          <button id="btnOpenCreateEventModal" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Create New Event
+          </button>
+        </div>
+      </div>
+
+      <!-- Live KPI Metrics -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span>Total Revenue</span>
+            <span class="kpi-icon">💰</span>
+          </div>
+          <div id="kpiRevenue" class="kpi-value">$0.00</div>
+          <span class="kpi-trend text-success">From settled paid orders</span>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span>Paid Orders</span>
+            <span class="kpi-icon">📦</span>
+          </div>
+          <div id="kpiPaidOrders" class="kpi-value">0</div>
+          <span class="kpi-trend">Completed checkouts</span>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span>Hold-to-Buy Conversion</span>
+            <span class="kpi-icon">📈</span>
+          </div>
+          <div id="kpiConversionRate" class="kpi-value">0%</div>
+          <span class="kpi-trend text-info">Holds successfully converted</span>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span>Active Temporary Holds</span>
+            <span class="kpi-icon">⏳</span>
+          </div>
+          <div id="kpiActiveHolds" class="kpi-value">0</div>
+          <span class="kpi-trend text-warning">Currently in 10m checkout</span>
+        </div>
+      </div>
+
+      <!-- Tier Breakdown & Real-Time Allocation Table -->
+      <div class="card mt-4">
+        <div class="card-header">
+          <h3>Ticket Tier Allocation & Capacity Status</h3>
+          <span class="badge badge-info">Atomic Decrement Tracker</span>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Event / Tier</th>
+                <th>Price</th>
+                <th>Total Capacity</th>
+                <th>Available</th>
+                <th>On Hold (10m)</th>
+                <th>Sold</th>
+                <th>Utilization</th>
+              </tr>
+            </thead>
+            <tbody id="tierBreakdownBody">
+              <tr><td colspan="7" class="text-center text-muted">Loading tier analytics...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recent Transactions Ledger -->
+      <div class="card mt-4">
+        <div class="card-header">
+          <h3>Recent Transactions Ledger</h3>
+          <span class="badge badge-secondary">Real-Time Audit Trail</span>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Transaction ID</th>
+                <th>Event</th>
+                <th>Attendee</th>
+                <th>Amount</th>
+                <th>Gateway Status</th>
+                <th>Gateway Ref</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody id="transactionsBody">
+              <tr><td colspan="7" class="text-center text-muted">No transactions recorded yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: Concurrency Stress Test Lab -->
+    <section id="tab-concurrency" class="tab-pane">
+      <div class="section-header">
+        <div>
+          <h2>Concurrency Race Condition Simulator Lab</h2>
+          <p class="section-subtitle">Fire multiple simultaneous booking requests at once to watch SQLite <code>BEGIN IMMEDIATE</code> eliminate double-booking</p>
+        </div>
+      </div>
+
+      <div class="card test-setup-card">
+        <div class="test-controls-grid">
+          <div class="form-group">
+            <label for="concurrencyTierSelect">Target Ticket Tier:</label>
+            <select id="concurrencyTierSelect" class="form-input">
+              <option value="tier_early_1">Early Bird Limited (Total: 10 seats)</option>
+              <option value="tier_vip_1">VIP All-Access Pass (Total: 50 seats)</option>
+              <option value="tier_ga_1">General Admission (Total: 200 seats)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="concurrencyUserCount">Simultaneous Buyers Firing:</label>
+            <select id="concurrencyUserCount" class="form-input">
+              <option value="5">5 Simultaneous Buyers</option>
+              <option value="10">10 Simultaneous Buyers</option>
+              <option value="15" selected>15 Simultaneous Buyers</option>
+              <option value="20">20 Simultaneous Buyers</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="concurrencyQty">Quantity per Buyer:</label>
+            <select id="concurrencyQty" class="form-input">
+              <option value="1" selected>1 Ticket Each</option>
+              <option value="2">2 Tickets Each</option>
+            </select>
+          </div>
+          <div class="form-group btn-align">
+            <button id="btnRunConcurrency" class="btn btn-danger btn-block">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+              Launch Simultaneous Race Test
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Simulation Live Results -->
+      <div id="concurrencyResultsCard" class="card mt-4 hidden">
+        <div class="card-header">
+          <h3>Simulation Execution Report</h3>
+          <span id="doubleBookingBadge" class="badge badge-success">✓ Zero Double-Booking Verified</span>
+        </div>
+        
+        <div class="sim-metrics-grid">
+          <div class="sim-metric">
+            <span class="label">Initial Available</span>
+            <span id="simInitialCapacity" class="val">--</span>
+          </div>
+          <div class="sim-metric">
+            <span class="label">Parallel Attempts Fired</span>
+            <span id="simAttemptsFired" class="val">--</span>
+          </div>
+          <div class="sim-metric highlight-success">
+            <span class="label">Successful Holds (201)</span>
+            <span id="simSuccessfulHolds" class="val">--</span>
+          </div>
+          <div class="sim-metric highlight-danger">
+            <span class="label">Blocked / Rejected (409)</span>
+            <span id="simRejectedAttempts" class="val">--</span>
+          </div>
+          <div class="sim-metric">
+            <span class="label">Remaining Available</span>
+            <span id="simFinalCapacity" class="val">--</span>
+          </div>
+        </div>
+
+        <div class="sim-card-body">
+          <h4>Simulated User Thread Audit:</h4>
+          <div id="simAttemptsGrid" class="sim-attempts-grid">
+            <!-- Simulated cards -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: System & Worker Diagnostics -->
+    <section id="tab-admin" class="tab-pane">
+      <div class="section-header">
+        <div>
+          <h2>Platform Diagnostics & Background Worker</h2>
+          <p class="section-subtitle">Real-time telemetry on automated expired hold cleanup sweeps and multi-tier caching</p>
+        </div>
+      </div>
+
+      <div class="diagnostics-grid">
+        <!-- Worker Card -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Background Worker (Expired Hold Sweep)</h3>
+            <span id="workerRunningBadge" class="badge badge-success">Running (5s poll)</span>
+          </div>
+          <p class="text-sm text-muted">
+            The worker runs asynchronously every 5 seconds to find holds where <code>status = 'HOLD' AND datetime(expires_at) &lt;= datetime('now')</code>. Expired holds are released and capacity returned atomically.
+          </p>
+
+          <div class="stats-list">
+            <div class="stats-row">
+              <span>Total Sweeps Executed:</span>
+              <strong id="workerTotalRuns">0</strong>
+            </div>
+            <div class="stats-row">
+              <span>Total Holds Auto-Released:</span>
+              <strong id="workerTotalReleased" class="text-warning">0</strong>
+            </div>
+            <div class="stats-row">
+              <span>Last Sweep Time:</span>
+              <span id="workerLastRunTime" class="text-muted">--</span>
+            </div>
+            <div class="stats-row">
+              <span>Holds Released in Last Sweep:</span>
+              <strong id="workerLastCount">0</strong>
+            </div>
+          </div>
+
+          <div class="mt-4">
+            <button id="btnManualSweep" class="btn btn-warning btn-block">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path><path d="M16 21h5v-5"></path></svg>
+              Trigger Manual Sweep Now
+            </button>
+          </div>
+        </div>
+
+        <!-- Caching Layer Card -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Multi-Tier Caching Telemetry</h3>
+            <span id="cacheEngineType" class="badge badge-info">In-Memory TTL</span>
+          </div>
+          <p class="text-sm text-muted">
+            Catalog and tier requests hit the cache layer with surgical invalidation when holds are created, converted, expired, or manually released.
+          </p>
+
+          <div class="stats-list">
+            <div class="stats-row">
+              <span>Cache Hits:</span>
+              <strong id="cacheHits" class="text-success">0</strong>
+            </div>
+            <div class="stats-row">
+              <span>Cache Misses:</span>
+              <strong id="cacheMisses" class="text-danger">0</strong>
+            </div>
+            <div class="stats-row">
+              <span>Invalidations Executed:</span>
+              <strong id="cacheInvalidations">0</strong>
+            </div>
+            <div class="stats-row">
+              <span>Active Keys in Cache:</span>
+              <strong id="cacheKeyCount">0</strong>
+            </div>
+            <div class="stats-row">
+              <span>Server Uptime:</span>
+              <span id="cacheUptime">0s</span>
+            </div>
+          </div>
+
+          <div class="mt-4">
+            <button id="btnFlushCache" class="btn btn-outline-danger btn-block">
+              Flush All Cache Keys
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Create Event Modal -->
+  <div id="createEventModal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Create New Multi-Tenant Event</h3>
+        <button id="btnCloseModal" class="btn-close">&times;</button>
+      </div>
+      <form id="createEventForm" class="modal-body">
+        <div class="form-group">
+          <label for="eventTitle">Event Title *</label>
+          <input type="text" id="eventTitle" class="form-input" placeholder="e.g. NextGen Web Summit 2026" required>
+        </div>
+        <div class="form-group">
+          <label for="eventDescription">Description</label>
+          <textarea id="eventDescription" class="form-input" rows="2" placeholder="Brief event summary..."></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="eventVenue">Venue / Platform *</label>
+            <input type="text" id="eventVenue" class="form-input" placeholder="e.g. Grand Auditorium & Livestream" required>
+          </div>
+          <div class="form-group">
+            <label for="eventDate">Event Date *</label>
+            <input type="datetime-local" id="eventDate" class="form-input" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="salesCutoff">Sales Cutoff Date *</label>
+          <input type="datetime-local" id="salesCutoff" class="form-input" required>
+        </div>
+
+        <div class="tiers-builder-section">
+          <div class="tiers-header">
+            <h4>Ticket Tiers Configuration</h4>
+            <button type="button" id="btnAddTierRow" class="btn btn-xs btn-secondary">+ Add Tier</button>
+          </div>
+          <div id="tiersContainer" class="tiers-list">
+            <!-- Dynamic rows -->
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btnCancelCreateEvent" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-primary">Publish Event & Tiers</button>
+        </div>
+      </form>
+    </div>
+  <!-- Backend API Configuration Modal (for Render + Vercel) -->
+  <div id="apiConfigModal" class="modal-backdrop hidden">
+    <div class="modal-box" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3>Backend API Connection (Render)</h3>
+        <button id="btnCloseApiModal" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="text-sm text-muted">
+          When deployed on Vercel, paste your live Render Web Service URL below (e.g. <code>https://eventnest-backend.onrender.com</code>). For local testing, leave blank to use the same host.
+        </p>
+        <div class="form-group mt-4">
+          <label for="inputApiBaseUrl">Render Backend URL:</label>
+          <input type="url" id="inputApiBaseUrl" class="form-input" placeholder="https://your-service.onrender.com">
+        </div>
+        <div id="apiTestFeedback" class="text-sm mt-2"></div>
+        <div class="modal-footer">
+          <button type="button" id="btnTestApiConnection" class="btn btn-secondary">Test Connection</button>
+          <button type="button" id="btnSaveApiConfig" class="btn btn-primary">Save & Connect</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

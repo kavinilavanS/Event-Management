@@ -1,10 +1,11 @@
 {
-  "name": "bala",
+  "name": "eventnest",
   "version": "1.0.0",
-  "description": "",
-  "main": "server.js",
+  "description": "Multi-Tenant Event & Ticket Reservation System",
+  "main": "backend/server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node backend/server.js",
+    "start:backend": "node backend/server.js",
     "test": "node -e \"console.log('All tests passed')\""
   },
   "keywords": [],
