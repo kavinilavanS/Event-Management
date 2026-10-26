@@ -1,0 +1,391 @@
+{
+  "info": {
+    "_postman_id": "c1f79a94-4b53-4b0e-b7d5-d09f7a931088",
+    "name": "Multi-Tenant Event & Ticket Reservation System API",
+    "description": "Comprehensive Postman test collection for EventNest. Covers Role-Based Access Control (RBAC), 10-minute temporary holds, ACID database transactions, concurrency double-booking prevention, mock payment gateway simulation, background worker sweeps, and organizer analytics.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "activeTierId",
+      "value": "tier_vip_1",
+      "type": "string"
+    },
+    {
+      "key": "lastHoldId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication & RBAC",
+      "item": [
+        {
+          "name": "List Seeded Users & Current Persona",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-user-id", "value": "usr_att_1" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "users"]
+            }
+          }
+        },
+        {
+          "name": "RBAC Edge Case: Attendee Forbidden from Creating Event (Expect 403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-user-id", "value": "usr_att_1" },
+              { "key": "x-role", "value": "ATTENDEE" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Unauthorized Festival\",\n  \"venue\": \"Nowhere\",\n  \"event_date\": \"2026-12-01\",\n  \"sales_cutoff_date\": \"2026-11-30\",\n  \"tiers\": [{ \"name\": \"General\", \"price\": 20, \"capacity\": 10 }]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "events"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Event Management & Caching",
+      "item": [
+        {
+          "name": "Get Events (First Hit - Database)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "events"]
+            }
+          }
+        },
+        {
+          "name": "Get Events (Second Hit - Cache Layer)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "events"]
+            }
+          }
+        },
+        {
+          "name": "Create Event with Ticket Tiers (Organizer Role)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-user-id", "value": "usr_org_1" },
+              { "key": "x-role", "value": "ORGANIZER" },
+              { "key": "x-tenant-id", "value": "tenant_acme" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Cloud Native & AI Summit 2026\",\n  \"description\": \"Architecture and concurrency masterclasses.\",\n  \"venue\": \"Moscone Center, San Francisco\",\n  \"event_date\": \"2026-12-15T09:00:00Z\",\n  \"sales_cutoff_date\": \"2026-12-14T23:59:59Z\",\n  \"tiers\": [\n    { \"name\": \"VIP Pass\", \"price\": 199.99, \"capacity\": 20 },\n    { \"name\": \"Standard Entry\", \"price\": 49.99, \"capacity\": 100 }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "events"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. 10-Minute Reservation Holds",
+      "item": [
+        {
+          "name": "Place 10-Minute Hold on Tickets",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.holdId) {",
+                  "    pm.collectionVariables.set('lastHoldId', json.holdId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-user-id", "value": "usr_att_1" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tier_id\": \"tier_ga_1\",\n  \"quantity\": 2,\n  \"hold_minutes\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/hold",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reservations", "hold"]
+            }
+          }
+        },
+        {
+          "name": "Inspect Active Hold Status & Remaining Seconds",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/{{lastHoldId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reservations", "{{lastHoldId}}"]
+            }
+          }
+        },
+        {
+          "name": "Cancel & Release Hold Manually",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hold_id\": \"{{lastHoldId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/release",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reservations", "release"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Payment Simulation & Checkout",
+      "item": [
+        {
+          "name": "Create Hold for Checkout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.holdId) {",
+                  "    pm.collectionVariables.set('lastHoldId', json.holdId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-user-id", "value": "usr_att_1" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tier_id\": \"tier_ga_1\",\n  \"quantity\": 1,\n  \"hold_minutes\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/hold",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reservations", "hold"]
+            }
+          }
+        },
+        {
+          "name": "Checkout - Simulated Payment SUCCESS",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-user-id", "value": "usr_att_1" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hold_id\": \"{{lastHoldId}}\",\n  \"simulated_payment_status\": \"SUCCESS\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/checkout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "checkout"]
+            }
+          }
+        },
+        {
+          "name": "Edge Case: Re-Checkout Already Converted Hold (Expect 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-user-id", "value": "usr_att_1" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hold_id\": \"{{lastHoldId}}\",\n  \"simulated_payment_status\": \"SUCCESS\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/checkout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "checkout"]
+            }
+          }
+        },
+        {
+          "name": "Checkout - Simulated Payment DECLINED (Auto-Release Test)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-user-id", "value": "usr_att_1" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hold_id\": \"{{lastHoldId}}\",\n  \"simulated_payment_status\": \"DECLINED\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/checkout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "checkout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Concurrency Race Condition Testing",
+      "item": [
+        {
+          "name": "Run Parallel Race Simulation (Atomic Lock Verification)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tier_id\": \"tier_early_1\",\n  \"total_attempts\": 15,\n  \"quantity\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/simulate-concurrency",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "reservations", "simulate-concurrency"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Background Worker & Operations",
+      "item": [
+        {
+          "name": "Inspect Background Worker Polling Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/worker-status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "worker-status"]
+            }
+          }
+        },
+        {
+          "name": "Trigger Immediate Worker Sweep for Expired Holds",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/cleanup-holds",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "cleanup-holds"]
+            }
+          }
+        },
+        {
+          "name": "Inspect Cache Metrics (Hits/Misses/Driver)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cache/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cache", "stats"]
+            }
+          }
+        },
+        {
+          "name": "Flush Active Cache",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/cache/flush",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cache", "flush"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Analytics Dashboard",
+      "item": [
+        {
+          "name": "Get Organizer Real-Time Revenue & Conversion Rate",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-user-id", "value": "usr_org_1" },
+              { "key": "x-role", "value": "ORGANIZER" },
+              { "key": "x-tenant-id", "value": "tenant_acme" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/organizer",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "organizer"]
+            }
+          }
+        },
+        {
+          "name": "Get Admin Platform-Wide Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-user-id", "value": "usr_admin_1" },
+              { "key": "x-role", "value": "ADMIN" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/analytics/admin",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "analytics", "admin"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
