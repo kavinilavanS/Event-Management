@@ -18,11 +18,30 @@ const state = {
 // --------------------------------------------------------------
 // API Configuration & Base URL (Supports Vercel -> Render)
 // --------------------------------------------------------------
+function sanitizeBackendUrl(url) {
+  if (!url) return '';
+  let clean = url.trim();
+  if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+    clean = 'https://' + clean;
+  }
+  clean = clean.replace(/\/+$/, '');
+  clean = clean.replace(/\/api\/health$/i, '');
+  clean = clean.replace(/\/api$/i, '');
+  return clean.replace(/\/+$/, '');
+}
+
 function getApiBaseUrl() {
   const saved = localStorage.getItem('EVENTNEST_API_BASE_URL');
-  if (saved) return saved.replace(/\/+$/, '');
-  if (window.EVENTNEST_API_BASE_URL) return window.EVENTNEST_API_BASE_URL.replace(/\/+$/, '');
-  return '';
+  if (saved) return sanitizeBackendUrl(saved);
+  if (window.EVENTNEST_API_BASE_URL) return sanitizeBackendUrl(window.EVENTNEST_API_BASE_URL);
+
+  // If running locally, use relative path to local server
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return '';
+  }
+
+  // When deployed to Vercel, default directly to Render backend URL
+  return 'https://eventnest-backend.onrender.com';
 }
 
 function updateApiStatus(isHealthy, label = null) {
@@ -801,35 +820,47 @@ function initApiConfigModal() {
   });
 
   btnTest.addEventListener('click', async () => {
-    const testUrl = inputUrl.value.trim().replace(/\/+$/, '');
-    feedback.innerHTML = '<span class="text-info">Testing connection to /api/health...</span>';
+    const rawInput = inputUrl.value.trim();
+    const testUrl = sanitizeBackendUrl(rawInput);
+    if (testUrl) inputUrl.value = testUrl;
+
+    feedback.innerHTML = '<span class="text-info">Pinging /api/health (may take ~30s on cold start)...</span>';
     btnTest.disabled = true;
 
     try {
       const target = testUrl ? `${testUrl}/api/health` : '/api/health';
-      const res = await fetch(target);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+      const res = await fetch(target, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
       const data = await res.json();
       if (res.ok && data.status === 'ok') {
         feedback.innerHTML = `<span class="text-success">✓ Connected! Server uptime: ${data.uptimeSeconds}s (SQLite ready)</span>`;
+        updateApiStatus(true, 'Render: Online');
       } else {
         feedback.innerHTML = `<span class="text-warning">⚠ Server responded with status ${res.status}</span>`;
       }
     } catch (err) {
-      feedback.innerHTML = `<span class="text-danger">✕ Connection failed: ${err.message}. Check if your Render Web Service is running.</span>`;
+      feedback.innerHTML = `<span class="text-danger">✕ Connection failed: ${err.message}. If Render is cold-starting, wait 30s and retry.</span>`;
     } finally {
       btnTest.disabled = false;
     }
   });
 
   btnSave.addEventListener('click', () => {
-    const newUrl = inputUrl.value.trim().replace(/\/+$/, '');
-    if (newUrl) {
-      localStorage.setItem('EVENTNEST_API_BASE_URL', newUrl);
-      showToast(`Connected to backend: <strong>${newUrl}</strong>`, 'success');
+    const raw = inputUrl.value.trim();
+    const cleanUrl = sanitizeBackendUrl(raw);
+
+    if (cleanUrl) {
+      localStorage.setItem('EVENTNEST_API_BASE_URL', cleanUrl);
+      inputUrl.value = cleanUrl;
+      showToast(`Connected to backend: <strong>${cleanUrl}</strong>`, 'success');
       updateApiStatus(true, 'Render: Connected');
     } else {
       localStorage.removeItem('EVENTNEST_API_BASE_URL');
-      showToast('Backend URL cleared. Using default relative API paths.', 'info');
+      showToast('Backend URL reset to default proxy.', 'info');
       updateApiStatus(true, 'Backend: Auto');
     }
 

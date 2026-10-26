@@ -2,6 +2,7 @@
   "version": 2,
   "cleanUrls": true,
   "routes": [
+    { "src": "/api/(.*)", "dest": "https://eventnest-backend.onrender.com/api/$1" },
     { "src": "/styles.css", "dest": "/frontend/styles.css" },
     { "src": "/app.js", "dest": "/frontend/app.js" },
     { "src": "/(.*)", "dest": "/frontend/index.html" }
