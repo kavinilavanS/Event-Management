@@ -1184,6 +1184,9 @@ body {
   font-size: 0.8rem;
   transition: all 0.2s ease;
 }
+.api-config-btn * {
+  pointer-events: none;
+}
 .api-config-btn:hover {
   border-color: var(--border-strong);
   background: rgba(255, 255, 255, 0.1);

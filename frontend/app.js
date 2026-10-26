@@ -159,7 +159,18 @@ async function loadEvents() {
 
   const res = await apiFetch('/api/events');
   if (!res.ok) {
-    grid.innerHTML = `<div class="empty-state-card"><p class="text-danger">Failed to load events: ${res.data.error || 'Unknown error'}</p></div>`;
+    grid.innerHTML = `
+      <div class="empty-state-card" style="grid-column: 1 / -1;">
+        <div class="empty-icon">🔌</div>
+        <h3 class="text-danger">Backend Server Not Connected</h3>
+        <p class="text-muted" style="margin-bottom: 1.25rem;">
+          ${res.data.error || 'Failed to reach API server. Please configure your live Render backend URL.'}
+        </p>
+        <button class="btn btn-primary" onclick="window.openApiModal()">
+          ⚙️ Connect Render Backend URL
+        </button>
+      </div>
+    `;
     return;
   }
 
@@ -777,11 +788,13 @@ function initApiConfigModal() {
 
   inputUrl.value = getApiBaseUrl();
 
-  btnOpen.addEventListener('click', () => {
+  window.openApiModal = function() {
     inputUrl.value = getApiBaseUrl();
     feedback.innerHTML = '';
     modal.classList.remove('hidden');
-  });
+  };
+
+  btnOpen.addEventListener('click', window.openApiModal);
 
   btnClose.addEventListener('click', () => {
     modal.classList.add('hidden');
