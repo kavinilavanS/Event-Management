@@ -65,14 +65,14 @@ function requireRole(allowedRoles) {
   };
 }
 
-// Health Check Endpoint (for Render and Vercel status checks)
-app.get('/api/health', (req, res) => {
+// Health Check Endpoints (for Render, Vercel, and cloud load balancers)
+app.get(['/api/health', '/health', '/healthz', '/up'], (req, res) => {
   res.json({
     status: 'ok',
     service: 'eventnest-backend',
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime()),
-    database: 'sqlite_wal'
+    database: 'sqlite'
   });
 });
 

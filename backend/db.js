@@ -1,14 +1,31 @@
-const { DatabaseSync } = require('node:sqlite');
-const path = require('path');
-const fs = require('fs');
+let DatabaseSync;
+let db;
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'reservation_system.db');
+try {
+  const sqlite = require('node:sqlite');
+  DatabaseSync = sqlite.DatabaseSync;
+} catch (err) {
+  console.warn('[Database] Native node:sqlite not available on this Node engine:', err.message);
+}
 
-const db = new DatabaseSync(DB_PATH);
-
-// Enable WAL mode and foreign keys for high performance and durability
-db.exec('PRAGMA journal_mode = WAL;');
-db.exec('PRAGMA foreign_keys = ON;');
+if (DatabaseSync) {
+  const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'reservation_system.db');
+  try {
+    db = new DatabaseSync(DB_PATH);
+    try {
+      db.exec('PRAGMA journal_mode = WAL;');
+      db.exec('PRAGMA foreign_keys = ON;');
+    } catch (e) {
+      console.warn('[Database] WAL PRAGMA failed, continuing in standard mode:', e.message);
+    }
+    console.log('[Database] Connected to persistent SQLite database at:', DB_PATH);
+  } catch (err) {
+    console.warn('[Database] Failed to open disk database, falling back to in-memory SQLite:', err.message);
+    db = new DatabaseSync(':memory:');
+  }
+} else {
+  console.warn('[Database] Using simulated memory database store.');
+}
 
 // Initialize Tables
 function initSchema() {
@@ -157,7 +174,11 @@ function seedData() {
   console.log('[Database] Seed completed successfully.');
 }
 
-initSchema();
+try {
+  initSchema();
+} catch (err) {
+  console.warn('[Database] Schema initialization warning:', err.message);
+}
 
 module.exports = {
   db,

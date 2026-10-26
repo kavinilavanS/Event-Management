@@ -4,8 +4,8 @@
   "description": "Multi-Tenant Event & Ticket Reservation System",
   "main": "backend/server.js",
   "scripts": {
-    "start": "node backend/server.js",
-    "start:backend": "node backend/server.js",
+    "start": "node --experimental-sqlite backend/server.js",
+    "start:backend": "node --experimental-sqlite backend/server.js",
     "test": "node -e \"console.log('All tests passed')\""
   },
   "keywords": [],
@@ -14,7 +14,8 @@
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^5.3.0",
-    "ioredis": "^6.0.0"
+    "ioredis": "^6.0.0",
+    "sql.js": "^1.15.2"
   },
   "engines": {
     "node": ">=22.0.0"
