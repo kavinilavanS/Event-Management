@@ -1,4 +1,4 @@
-# 🎟️ EventNest: Multi-Tenant Event & Ticket Reservation System
+# 🎟️ Royal Carnival: Multi-Tenant Event & Ticket Reservation System
 
 EventNest is a high-concurrency, multi-tenant event management and ticket reservation system engineered to eliminate double-booking race conditions while providing a simple, responsive, and intuitive experience.
 
